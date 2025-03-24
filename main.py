@@ -4,21 +4,14 @@ import requests
 from telegram import Bot
 from telegram.ext import CommandHandler, Updater
 
-# 🔐 Токены и ID
 TELEGRAM_TOKEN = "7666979213:AAESg9nVlPfCkx_lg0gyNUdgoNUFXSbsw0Y"
 UZUM_API_KEY = "vCRhQSWjWcuusOQzTTAGP9mnI6op6wTaZ1QU7NgWxac="
 CHAT_ID = 998980322
-
-# 🌐 API URL
 UZUM_API_URL = "https://api-seller.uzum.uz/api/seller/v1/orders"
 
-# 📦 Обработанные заказы
 processed_orders = set()
-
-# 🤖 Инициализация бота
 bot = Bot(token=TELEGRAM_TOKEN)
 
-# 📥 Получение заказов
 def get_new_orders():
     headers = {
         "Authorization": f"Bearer {UZUM_API_KEY}",
@@ -35,7 +28,6 @@ def get_new_orders():
         print("Ошибка запроса:", e)
         return []
 
-# 📝 Форматирование заказа
 def format_order(order):
     order_id = order.get("id")
     customer = order.get("customer", {})
@@ -51,7 +43,6 @@ def format_order(order):
         f"🛒 Товары:\n{items_text}"
     )
 
-# 🔄 Проверка и уведомление
 def check_and_notify():
     orders = get_new_orders()
     for order in orders:
@@ -61,31 +52,24 @@ def check_and_notify():
             bot.send_message(chat_id=CHAT_ID, text=message)
             processed_orders.add(order_id)
 
-# ⏱ Периодическая проверка
 def periodic_check():
     while True:
         check_and_notify()
         time.sleep(300)
 
-# ✅ Команды
 def start(update, context):
     update.message.reply_text("👋 Бот работает и будет уведомлять о заказах.")
 
 def check(update, context):
-    update.message.reply_text("🔄 Проверка заказов...")
+    update.message.reply_text("🔄 Проверяю заказы...")
     check_and_notify()
     update.message.reply_text("✅ Готово!")
 
-# 🚀 Запуск
 def main():
-    # Приветственное сообщение
     bot.send_message(chat_id=CHAT_ID, text="✅ Бот запущен и ждёт заказы!")
-
-    # Параллельно запускаем проверку заказов
     thread = threading.Thread(target=periodic_check)
     thread.start()
 
-    # Telegram команды
     updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler("start", start))
