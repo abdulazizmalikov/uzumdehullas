@@ -1,17 +1,20 @@
 #!/bin/bash
 
-# Set webhook
-WEBHOOK_URL="https://uzumdehullas-production.up.railway.app/webhook"
-BOT_TOKEN="7666979213:AAESg9nVlPfCkx_lg0gyNUdgoNUFXSbsw0Y"  # Replace with new token!
+# Activate Python virtual environment
+source /opt/venv/bin/activate
 
-# Configure webhook
-curl -X POST \
-  "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "'"${WEBHOOK_URL}"'",
-    "allowed_updates": ["message"]
-  }'
+# Set webhook on startup
+python -c "
+import os, requests; 
+requests.post(
+    f'https://api.telegram.org/bot{os.getenv(\"TELEGRAM_BOT_TOKEN\")}/setWebhook',
+    json={
+        'url': f'https://{os.getenv(\"RAILWAY_STATIC_URL\")}/webhook',
+        'allowed_updates': ['message'],
+        'drop_pending_updates': True
+    }
+)
+"
 
-# Start your application
-python main.py
+# Start the application
+gunicorn --bind 0.0.0.0:$PORT --timeout 600 main:app
