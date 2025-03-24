@@ -8,6 +8,24 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 
+import time
+import requests
+
+class UzumOrderBot:
+    def __init__(self):
+        self.last_request = 0
+        
+    def safe_telegram_request(self, method, **kwargs):
+        """Handle Telegram rate limits"""
+        now = time.time()
+        if now - self.last_request < 1:  # 1 second between requests
+            time.sleep(1)
+        self.last_request = time.time()
+        return requests.post(
+            f"https://api.telegram.org/bot{self.token}/{method}",
+            **kwargs
+        )
+        
 class UzumOrderBot:
     def __init__(self):
         self.token = os.getenv('TELEGRAM_BOT_TOKEN')
