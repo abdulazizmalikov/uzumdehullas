@@ -4,11 +4,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = os.getenv("7666979213:AAESg9nVlPfCkx_lg0gyNUdgoNUFXSbsw0Y")
-APP_URL = os.getenv("uzumdehullas-production.up.railway.app")
+# Get values from environment variables
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Store in .env file!
+APP_URL = os.getenv("RAILWAY_STATIC_URL")
 
+# Configure webhook
 response = requests.post(
-    f"https://api.telegram.org/bot7666979213:AAESg9nVlPfCkx_lg0gyNUdgoNUFXSbsw0Y/setWebhook",
-    json={"url": f"https://uzumdehullas-production.up.railway.app/webhook"}
+    f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+    json={
+        "url": f"https://{APP_URL}/webhook",
+        "allowed_updates": ["message"]
+    }
 )
-print(response.json())
+
+print("Webhook setup result:", response.json())
