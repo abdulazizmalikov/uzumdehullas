@@ -1,107 +1,120 @@
 import os
 import time
-import threading
+import logging
 import requests
+from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
+
+# Initialize logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('bot.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 app = Flask(__name__)
 
-import time
-import requests
-
-@app.route('/health')
-def health_check():
-    return jsonify({"status": "healthy"}), 200
-    
-class UzumOrderBot:
-    def __init__(self):
-        self.last_request = 0
-        
-    def safe_telegram_request(self, method, **kwargs):
-        """Handle Telegram rate limits"""
-        now = time.time()
-        if now - self.last_request < 1:  # 1 second between requests
-            time.sleep(1)
-        self.last_request = time.time()
-        return requests.post(
-            f"https://api.telegram.org/bot{self.token}/{method}",
-            **kwargs
-        )
-        
 class UzumOrderBot:
     def __init__(self):
         self.token = os.getenv('TELEGRAM_BOT_TOKEN')
         self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
         self.uzum_username = os.getenv('UZUM_USERNAME')
         self.uzum_password = os.getenv('UZUM_PASSWORD')
-        self.last_update_id = 0  # For update tracking
+        self.last_request = time.time()
+        
+        # Debug env vars
+        logger.info("Environment Variables Loaded:")
+        logger.info(f"BOT_TOKEN: {'*****' if self.token else 'MISSING'}")
+        logger.info(f"CHAT_ID: {self.chat_id or 'MISSING'}")
+        
         self._start_background_worker()
 
     def _start_background_worker(self):
         """Start order checking in background"""
         def worker():
             while True:
-                self._check_new_orders()
-                time.sleep(300)  # Check every 5 minutes
+                try:
+                    self._check_new_orders()
+                except Exception as e:
+                    logger.error(f"Background worker error: {str(e)}")
+                time.sleep(300)  # 5 minutes
 
-        thread = threading.Thread(target=worker, daemon=True)
-        thread.start()
+        threading.Thread(target=worker, daemon=True).start()
 
-    def _check_new_orders(self):
-        """Check Uzum for new orders"""
-        try:
-            # Your existing order checking logic here
-            print("Checking for new orders...")
-            # orders = get_orders_from_uzum()
-            # Process orders...
-        except Exception as e:
-            print(f"Order check error: {e}")
+    # ... [Include your existing Uzum API methods here] ...
 
-    # WEBHOOK HANDLERS
     @app.route('/webhook', methods=['POST'])
     def handle_webhook():
-        if request.method == 'POST':
-            try:
-                update = request.json
-                print(f"Update received: {update}")
+        try:
+            # Enhanced request logging
+            logger.info("\n" + "="*50)
+            logger.info("Incoming Headers: %s", dict(request.headers))
+            
+            if not request.is_json:
+                logger.error("Non-JSON request received")
+                return jsonify({"error": "JSON required"}), 400
 
-                # Security check
-                if 'message' in update:
-                    chat_id = update['message']['chat']['id']
-                    if str(chat_id) != os.getenv('TELEGRAM_CHAT_ID'):
-                        return jsonify({"status": "unauthorized"}), 403
+            update = request.get_json()
+            logger.info("Raw Update: %s", update)
 
-                    # Handle commands
-                    text = update['message'].get('text', '').lower()
-                    if '/start' in text:
-                        bot.send_telegram_message("🤖 Bot active! Monitoring orders...")
-                    elif '/status' in text:
-                        bot.send_telegram_message("✅ System operational")
+            # Security check
+            if 'message' in update:
+                chat_id = update['message']['chat']['id']
+                if str(chat_id) != os.getenv('TELEGRAM_CHAT_ID'):
+                    logger.warning(f"Unauthorized access from: {chat_id}")
+                    return jsonify({"status": "unauthorized"}), 403
 
-                return jsonify({"status": "ok"}), 200
+                # Command handling
+                text = update['message'].get('text', '').lower()
+                if '/start' in text:
+                    bot.send_telegram_message("🔄 Bot activated!")
+                elif '/status' in text:
+                    bot.send_telegram_message("✅ System operational")
 
-            except Exception as e:
-                print(f"Webhook error: {e}")
-                return jsonify({"error": str(e)}), 500
+            return jsonify({"status": "success"}), 200
 
-        return jsonify({"status": "method not allowed"}), 405
+        except Exception as e:
+            logger.error(f"Webhook failed: {str(e)}", exc_info=True)
+            return jsonify({"error": "Internal error"}), 500
+
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        return jsonify({
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat()
+        }), 200
 
     def send_telegram_message(self, text):
-        """Send message to Telegram"""
-        requests.post(
-            f"https://api.telegram.org/bot{self.token}/sendMessage",
-            json={
-                'chat_id': self.chat_id,
-                'text': text,
-                'parse_mode': 'HTML'
-            }
-        )
+        """Safe message sending with rate limiting"""
+        try:
+            now = time.time()
+            if now - self.last_request < 1:
+                time.sleep(1)
+                
+            response = requests.post(
+                f"https://api.telegram.org/bot{self.token}/sendMessage",
+                json={
+                    'chat_id': self.chat_id,
+                    'text': text,
+                    'parse_mode': 'HTML'
+                },
+                timeout=10
+            )
+            response.raise_for_status()
+            self.last_request = time.time()
+        except Exception as e:
+            logger.error(f"Failed to send Telegram message: {str(e)}")
 
 # Initialize bot
 bot = UzumOrderBot()
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 8000))
+    logger.info(f"Starting server on port {port}")
     app.run(host='0.0.0.0', port=port)
