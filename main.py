@@ -11,6 +11,10 @@ app = Flask(__name__)
 import time
 import requests
 
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+    
 class UzumOrderBot:
     def __init__(self):
         self.last_request = 0
